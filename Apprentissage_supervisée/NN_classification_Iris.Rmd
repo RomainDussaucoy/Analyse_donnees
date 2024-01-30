@@ -1,0 +1,361 @@
+---
+title: "TD4 Exercice2"
+author: "Romain Dussaucoy"
+date: "15/03/2022"
+output: html_document
+---
+```{r}
+library(ggplot2)
+library(neuralnet)
+```
+
+Nous allons effectuer une classification sur les données `iris`. On voudra faire une classification des espèces en fonction des caractéristiques des plantes (longueurs et largeurs des pétales et des sépales).\
+Nous allons utiliser un réseau de neurone pour ça.\
+1)\
+On commence par charger les données et on affiche les statistiques de résumés :\
+```{r}
+data(iris)
+summary(iris)
+```
+
+2)\
+Avant de pouvoir faire du réseau de neurone, on se doit de préparer les données:\
+a)\
+On vérifie si aucune valeur n'est manquante :\
+```{r}
+which(is.na(iris))
+```
+Aucune valeur ne manque, on peut passer à l'étape suivante.\
+b)\
+On nettoie les données 
+```{r}
+names(iris)= c("SL","SW","PL","PW","Species")
+head(iris)
+```
+
+c)\
+On trace les données longueurs des sépales Vs largeur des sépales, coloriées par espèce.
+```{r}
+ggplot(iris,aes(x=SL,y=SW, colour=Species))+
+  geom_point()
+```
+
+On trace les données longueurs des pétales Vs largeur des pétales, coloriées par espèce.
+```{r}
+ggplot(iris,aes(x=PL,y=PW, colour=Species))+
+  geom_point()
+```
+d)\
+Dans un réseaux de neurones, il est nécessaire que les données soit normalisés : on choisit de les normaliser en utilisant la fonction `scale()` qui effectue un centrage et une réduction de type : $Z =\frac{x-\mu}{\sigma}$ avec $\mu$ la moyenne et $\sigma$ l'écart-type.
+
+```{r}
+df_cr = scale(iris[,-5])
+head(df_cr)
+```
+
+3)\
+La fonction `neuralnet()`qui va nous servir à faire notre réseau de neurone n'accepte pas les valeurs strings pour les classes, on les change en booléen ou en valeur numérique. On va donc rajouter à nos valeurs normalisés 3 colonnes prennant soit 1 (pour l'espèce correspondante) ou 0 (pour une des deux autres espèces)
+```{r}
+Setosa = c(rep(1,50),rep(0,100))
+Versicolor = c(rep(0,50),rep(1,50),rep(0,50))
+Virginica = c(rep(0,100),rep(1,50))
+mydata = data.frame(df_cr,Setosa,Versicolor,Virginica)
+```
+
+On vérifie si on a pas fait d'oublie :
+```{r}
+which(is.na(mydata))
+```
+
+4)\
+On sépare désormais notre ensemble Train/Test avec un rapport 80/20 sur chaque espèce de façon a avoir le même nombre d'espèce à chaque fois de façon aléatoire.
+
+```{r}
+set.seed(1)
+index1 = sample(1:50, 50*0.8)
+index2 = sample(51:100, 50*0.8)
+index3 = sample(101:150, 50*0.8)
+index = c(index1,index2,index3)
+data_Train = mydata[index,]
+data_Test = mydata[-index,]
+```
+
+On vérifie rapidement si cela a bien marché :\
+
+```{r}
+print(sum(data_Train$Setosa))
+print(sum(data_Train$Versicolor))
+print(sum(data_Train$Virginica))
+```
+
+5)\
+Notre formule de classification est donné par `espèce1+espèce2+espèce3 ~ longueur_sépale+largeur_sépale+longueur_pétale+largeur_pétale`. Pour alléger le code, on leur donne une étiquette.
+```{r}
+names(data_Train)=c("SL","SW","PL","PW","S","Ve","Vi")
+formule = S+Ve+Vi~SL+SW+PL+PW
+attach(data_Train)
+```
+
+6)\
+On peut commencer à entrainer le modèle.
+On commence par un réseau de neurone avec une couche cachée de 3 neurones, on prend les paramètres à leurs valeurs par défaut :\ 
+```{r}
+nn1 = neuralnet(formule, data = data_Train, hidden=c(3), linear.output = TRUE)
+```
+Et on trace : 
+
+```{r}
+plot(nn1, rep ="best")
+```
+
+b)\
+On entraine un deuxième réseau de neurone avec une couche cachée de 4 neurones, un seuil de 0.01 et un nombre maximal de pas de 5000:
+
+```{r}
+nn2 = neuralnet(formule, data = data_Train, hidden=c(4),threshold = 0.01, stepmax = 5000, linear.output = FALSE)
+plot(nn2, rep ="best")
+```
+
+7)\
+On va désormais tester le modèle.\
+Pour le premier réseau de neurone :\
+On commence par ne prendre que les variables explicatives de l'ensemble de test:\
+```{r}
+classe_test <- subset(data_Test, select = c("SL","SW","PL","PW"))
+```
+Puis on mets dans un data frame les résultats sortis du modèle :
+```{r}
+nn1.results <- compute(nn1, classe_test)
+results <- data.frame(index = seq(1:30), 
+                      measured = c(rep("S",10),rep("Ve",10),rep("Vi",10)),
+                      prediction = nn1.results$net.result)
+results
+```
+Pour rendre la chose plus lisible, on arrondie les prédictions à l'unité:\
+```{r}
+Prediction_Setosa = sapply(results$prediction.1, round, digit = 0)
+Prediction_Versicolor = sapply(results$prediction.2, round, digit = 0)
+Prediction_Virginica = sapply(results$prediction.3, round, digit = 0)
+d = data.frame(index = seq(1:30), 
+                      measured = c(rep("S",10),rep("Ve",10),rep("Vi",10)),
+                      S_pred = Prediction_Setosa, 
+                      Ve_pred = Prediction_Versicolor,
+                      Vi_pred = Prediction_Virginica)
+d
+```
+Dans la colonne `S_pred` se situe les predictions de l'espèce Setosa, elles ont toutes été correctement prédite.\
+Dans la colonne `Ve_pred` se situe les prédictions de l'espèce Versicolor, une fleur a été mal prédite,et  a été classé Virginica.\
+Dans la colonne `Vi_pred` se situe les prédictions de l'espèce Virginica, elles ont toutes été bien classés.\
+On calcule la précision :
+```{r}
+pre1 = (sum(d$S_pred[1:10])+sum(d$Ve_pred[11:20])+sum(d$Vi_pred[21:30]))/30
+prediction_nn1 = pre1*100
+print(prediction_nn1)
+```
+La précision du premier réseau de neurone est de 96.67 $\%$.
+
+On reproduit cela pour le second réseau de neurone:\
+
+```{r}
+nn2.results <- compute(nn2, classe_test)
+results2 <- data.frame(index = seq(1:30), 
+                      measured = c(rep("S",10),rep("Ve",10),rep("Vi",10)),
+                      prediction = nn2.results$net.result)
+```
+
+On arrondis les prédictions :\
+```{r}
+Prediction_Setosa = sapply(results2$prediction.1, round, digit = 0)
+Prediction_Versicolor = sapply(results2$prediction.2, round, digit = 0)
+Prediction_Virginica = sapply(results2$prediction.3, round, digit = 0)
+d2 = data.frame(index = seq(1:30), 
+                      measured = c(rep("S",10),rep("Ve",10),rep("Vi",10)),
+                      S_pred = Prediction_Setosa, 
+                      Ve_pred = Prediction_Versicolor,
+                      Vi_pred = Prediction_Virginica)
+d2
+```
+
+```{r}
+pre2 = (sum(d2$S_pred[1:10])+sum(d2$Ve_pred[11:20])+sum(d2$Vi_pred[21:30]))/30
+prediction_nn2 = pre2*100
+print(prediction_nn2)
+```
+
+La précision du second réseau de neurone est comme le premier : de 96.67 $\%$.\
+8)\
+On va maintenant effectuer une validation croisée avec 10 plis pour vérifier nos résultats.\
+
+
+```{r message=FALSE, warning=FALSE}
+set.seed(0)
+#On mélange au préalable les données :
+mydata = mydata[sample(1:150),]
+```
+
+```{r}
+Precision = 0
+for (i in 0:9){
+  #On prépare les ensembles Train/Test
+  i1 = 15*i+1
+  i2 = 15*(i+1)
+  Test = mydata[i1:i2,]
+  Train = mydata[-(i1:i2),]
+  Mesure = subset(Test, select =c("Setosa","Versicolor","Virginica"))
+  Test = subset(Test, select =c("SL","SW","PL","PW"))
+  #On calcule le réseau de neurone 
+  names(Train)=c("SL","SW","PL","PW","S","Ve","Vi")
+  formule = S+Ve+Vi~SL+SW+PL+PW
+  nn = neuralnet(formule, data = Train, hidden=c(3))
+  #On le teste 
+  resultat = compute(nn, Test)
+  resultat = resultat$net.result
+  #Creation de dataframe avec les prédictions arrondis
+  a = sapply(resultat[,1], round, digit=0)
+  b = sapply(resultat[,2], round, digit=0)
+  c = sapply(resultat[,3], round, digit=0)
+  Prediction = data.frame(S = a, Ve =b, Vi =c)
+  #Calcul de la précision : On créé un tableau Mesure-Prediction. Ce tableau est constitué de 0 quand       c'est bien classés et de 1 ou de -1 si non (ils sont en même nombre et sur la même ligne)
+  Table = Mesure - Prediction 
+  #Si la première colonne est composé que de zéros, on peut s'intéresser qu'aux deux autres
+  k = 1
+  while(k<=15)
+  {
+    if (Table[k,1]==0)
+    {k = k+1}
+    else 
+    {break}
+  }
+  #Calcul de l'erreur
+   e = 0
+   for (j in 1:15)
+   {
+     if (abs(Table[j,2])==1)
+     {e = e+1}
+   }
+   pre = 1-(e/15)
+   #Precision du modèle sur chaque plis
+   print(pre)
+   Precision = Precision + pre
+   
+}
+#Précision moyenne
+print(Precision*10)
+```
+
+La précision moyenne calculée pour le premier réseau de neurone est de 96.67 $\%$
+
+```{r}
+Precision = 0
+for (i in 0:9){
+  #On prépare les ensembles Train/Test
+  i1 = 15*i+1
+  i2 = 15*(i+1)
+  Test = mydata[i1:i2,]
+  Train = mydata[-(i1:i2),]
+  Mesure = subset(Test, select =c("Setosa","Versicolor","Virginica"))
+  Test = subset(Test, select =c("SL","SW","PL","PW"))
+  #On calcule le réseau de neurone 
+  names(Train)=c("SL","SW","PL","PW","S","Ve","Vi")
+  formule = S+Ve+Vi~SL+SW+PL+PW
+  nn2 = neuralnet(formule, data = data_Train, hidden=c(4),threshold = 0.01, stepmax = 5000, linear.output = FALSE)
+  #On le teste 
+  resultat2 = compute(nn2, Test)
+  resultat2 = resultat2$net.result
+  #Creation de dataframe avec les prédictions arrondis
+  a = sapply(resultat2[,1], round, digit=0)
+  b = sapply(resultat2[,2], round, digit=0)
+  c = sapply(resultat2[,3], round, digit=0)
+  Prediction2 = data.frame(S = a, Ve =b, Vi =c)
+  #Calcul de la précision : On créé un tableau Mesure-Prediction. Ce tableau est constitué de 0 quand       c'est bien classés et de 1 ou de -1 si non (ils sont en même nombre et sur la même ligne)
+  Table = Mesure - Prediction2 
+  #Si la première colonne est composé que de zéros, on peut s'intéresser qu'aux deux autres
+  k = 1
+  while(k<=15)
+  {
+    if (Table[k,1]==0)
+    {k = k+1}
+    else 
+    {break}
+  }
+  #Calcul de l'erreur
+   e = 0
+   for (j in 1:15)
+   {
+     if (abs(Table[j,2])==1)
+     {e = e+1}
+   }
+   pre = 1-(e/15)
+   #Precision du modèle sur chaque plis
+   print(pre)
+   Precision = Precision + pre
+   
+}
+#Précision moyenne
+print(Precision*10)
+```
+
+La précision moyenne du second réseau de neurone est de 98.67 $%$.
+
+On constate que notre second réseau de neurone a une meilleure précision que le deuxième.\
+Il est possible que notre façon de faire ne soit pas optimal : étant donné que l'espèce Setosa est facilement séparable des deux autres, on a profité de cela pour se concentrer sur les deux autres espèces, qui en général, posent plus de problèmes.
+
+9)
+```{r}
+library(caret)
+```
+Ne sachant pas si `caret()` normalise les données automatiquement pour la méthode réseau de neurone, on préfère le refaire au cas où.
+
+```{r}
+Species = c(rep("S",50),rep("Ve",50),rep("Vi",50))
+df_cr = preProcess(iris[,-5],method = c("center", "scale"))
+
+Data_VC = data.frame(df_cr = scale(iris[,-5]),Species)
+names(Data_VC) = c("SL","SW","PL","PW","Species")
+head(Data_VC)
+```
+
+
+Nous allons effectuer une validation croisée à 10 plis et 5 répétitions.\
+Avec `expand.grid()`, on met le nombre de neurones cachée : 3 et 4.\
+Avec `TrainControl()`, on définit notre validation croisée.\
+On met le nombre d'itération maximum à 5000 pour rester cohérent avec le second réseau de neurones.\
+Pour les `weight decay`, ne connaissant pas la valeur par défaut, on le fait varier entre 0.01 et 0.5 par 0.05.
+
+
+```{r}
+my.grid = expand.grid(.decay =c(seq(0.01,0.5,0.05),seq(0.01,0.5,0.05)), .size = c(3,4))
+train_control = trainControl(method="repeatedcv", number=10, repeats=5)
+iris.fit = train(Species ~., 
+                      data = Data_VC,
+                      method = "nnet", 
+                      maxit = 5000, 
+                      tuneGrid = my.grid, 
+                      trControl=train_control,
+                      trace = F, 
+                      linout = 1)
+print(iris.fit)
+```
+
+
+Si on prend la valeur de `decay` égale à 0.06, alors les deux réseau de neurone ont la même précision égale à $97.333 \%$
+
+## Conclusion.
+Dans ce document nous voulions classer les données iris, pour cela nous avons entrainé deux modèles de réseaux de neurone : un avec une couche cachée de trois neurones et l'autre avec une couche cachée de 4 neurones. Pour tester les modèles nous avons fait 3 test différent :\
+- Un trés simple avec une séparation de l'ensemble en deux sous-ensembles : un utilisée pour l'apprentissage (contenant 80% des valeurs de l'ensemble de départ) et l'autre pour le test (avec 20% des valeurs). De cet test, est ressorti une précision égale pour les deux modèles ($96.67 \%$). \
+- Pour le second test nous avons procédé à une validation croisée à 10 plis. Il en résulte que le second modèle était le meilleur ($98.67 \%$ contre $96.67\%$)\
+- Pour le dernier test, nous avons effectués une validation croisée à 10 plis répétés cinq fois. La conclusion de ce dernier test est que les deux modèles ont une précision égale à $97.333 \%$.\
+On peut donc conclure que les deux modèles sont assez semblables. Il aurait été intéressant de faire varier le nombre de neurones dans la couche cachée pour voir l'impact engendré.
+
+
+
+
+
+
+
+
+
+
+
+
+

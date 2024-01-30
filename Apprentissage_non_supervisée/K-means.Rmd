@@ -1,0 +1,60 @@
+---
+title: "TD5 Exercice3"
+author: "Romain Dussaucoy"
+date: "04/04/2022"
+output: html_document
+---
+Nous allons faire un exemple simulé de k-means.\
+On créé un ensemble de données avec deux cluster (décallage de la moyenne) entre les 25 premières et dernières observations.
+```{r}
+set.seed(2)
+x = matrix(rnorm(50*2), ncol =2)
+x[1:25,1]=x[1:25,1]+3
+x[1:25,2]=x[1:25,2]-4
+
+km.out = kmeans(x,2,nstart = 20)
+
+km.out$cluster
+```
+
+Le k-means a parfaitement séparé les données (les 25 premières sont dans le cluster 1 et les 25 autres dans le cluster 2)\
+On trace les données et chaque observations coloriées selon son affectation de cluster :\
+
+```{r}
+plot(x, col =(km.out$cluster+1), main ="K-means clustering Resultats avec K=2", xlab ="", ylab ="", pch=20, cex =2)
+```
+
+Chaque point a été bien classés.\
+En général, on ne connait pas le nombre de clusters. Essayons avec trois clusters.\
+
+```{r}
+set.seed(4)
+km.out = kmeans(x,3,nstar = 20)
+km.out
+```
+
+Et on trace :
+```{r}
+plot(x, col =(km.out$cluster+1), main ="K-means Clustering Resultats avec K=3",xlab ="", ylab ="", pch=20, cex =2)
+```
+
+On cherche mainteant à comparer la différence en changeant la valeur de `nstart`, on la prend une fois égale à 1 et l'autre fois égale à 20.\
+Avant de faire un k-means, on affecte à une valeur un certain cluster, grâce à `nstart`, on répéte cette opération plusieurs fois, affinant ainsi le clustering finale.
+Pour comparer la meilleure façon de faire, on regarde la valeur de `tot.whitinss` qui est le total de la somme des carrées intra-cluster. Il faut qu'elle soit la plus petite possiblee.\
+
+```{r}
+set.seed(3)
+km.out = kmeans(x,3,nstart =1)
+km.out$tot.withinss
+```
+```{r}
+km.out = kmeans(x,3,nstart =20)
+km.out$tot.withinss
+```
+
+Ici, il semblerait que le fait d'augmenter le nombre d'affectations aléatoires initiales n'améliore pas sensiblement le modèle.
+
+
+
+
+

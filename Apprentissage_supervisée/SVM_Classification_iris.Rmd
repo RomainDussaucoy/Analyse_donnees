@@ -1,0 +1,160 @@
+---
+title: "TD3 Exercice3"
+author: "Romain Dussaucoy"
+date: "25/02/2022"
+output: html_document
+---
+
+```{r}
+library(caret)
+library(GGally)
+library(e1071)
+```
+
+Le but de ce document est de faire une classification SVM pour les données `iris`.\
+Dans un premier temps nous commencerons par faire cette classification par le biais de tous les paramètres (longueur et largeurs des pétales et des sépales). Nous utiliserons successivement les trois types de noyau : `linear`, `polynomial` et `radial`.\
+Ensuite, nous ferons la même chose mais en ne considérons cette fois-ci que la longueur et la largeur des pétales.\
+1)\
+On commence par charger nos données et les séparer en un ensemble Train/Test dans un rapport $80\%/20\%$. 
+```{r}
+data(iris)
+attach(iris)
+head(iris)
+```
+
+
+```{r}
+index = sample(1:150,0.8*150)
+Train = iris[index,]
+Test = iris[-index,]
+```
+
+2)
+Nous procédons à une rapide visualisation des données d'apprentissage (différents nuages de points, courbes de densités, corrélations, boxplots pour les espèces).
+```{r}
+ggpairs(Train)
+```
+
+a)\
+Grâce aux boxplots de la colonnes des espèces, il est évident que l'espèce __Setosa__ se sépare des deux autres (ses caractéristiques de pétales (longueur et largeur) se séparent nettement des espèces __Virginica__ et __Versicolor__, en particulier elles sont inférieurs à celles des deux autres. Une petite ambiguité est visible concernant les caractéristiques de sépales, certaines valeurs peuvent se retrouver assez proche des deux autres catégories)
+
+b)\
+Les espèces __Virginica__ et __Versicolor__ se séparent mal : leurs boxplots sont trés proches et se confondent sur certaines valeurs.
+
+c)\
+Les nuages de points __Sepal.Length vs Petal.Length__ et __Petal.Width vs Petal.Lenght__ ont une caractéristique commune : un regroupement sur le coin inférieur gauche. En sachant que les valeurs associés à __Petal.Length__ et __Petal.Width__ de l'espèce __Setosa__ sont trés basse, on peut en déduire que ce regroupement s'apparente à l'espèce __Setosa__. On peut donc tracer un plan séparateur séparant l'espèce __Setosa__ des deux autres.\
+Pour les deux autres espèces, étant donnés qu'elles se ressemblent, on essaiera les trois types de noyaux séparateurs d'une classification SVM pour les séparer au mieux.
+
+4)\
+Les deux paramètres les plus appropriés pour un bon modèle SVM sont __Petal.Length__ et __Petal.Width__ : Dans le cas de l'espèce __Setosa__, ils sont clairement séparés des deux autres espèces, et pour __Versicolor__ et __Virginica__, au vue de leurs boxplots, ce sont les deux paramètres présentant le plus petit écarts-types à médiannes différentes donc le nombres de chevauchement est moindre.
+
+3)\
+Nous allons calculer différents types de classificateurs SVM sur tous les paramètres et calculer leurs matrices de confusions pour chaque cas :\
+
+a-d)\
+Classificateur SVM avec noyau linéaire :\
+```{r}
+modele1_full = svm(Species~., data = Train, kernel = "linear", scale = FALSE)
+```
+
+Matrice de confusion :\
+```{r}
+pred1_full = predict(modele1_full,Test)
+table(pred1_full,Test[,5])
+```
+
+Aucun élément a été mal classé. On a une précision de $100\%$.\
+
+b-d))\
+Classificateur SVM avec noyeau polynomial :\
+```{r}
+modele2_full = svm(Species~., data = Train, kernel = "polynomial", scale = FALSE)
+```
+
+Matrice de confusion :\
+```{r}
+pred2_full = predict(modele2_full,Test)
+table(pred2_full,Test[,5])
+```
+
+Aucun élément a été mal classé. On a une précision de $100\%$.\
+
+c-d)\
+Classificateur SVM avec noyau radial :\
+```{r}
+modele3_full = svm(Species~., data = Train, kernel = "radial", scale = FALSE)
+```
+
+Matrice de confusion :\
+```{r}
+pred3_full = predict(modele3_full,Test)
+table(pred3_full,Test[,5])
+```
+
+Un éléments a été mal classé : on a un précision de $95\%$\
+
+e)\
+On a pu constater qu'en utilisant les noyaux de types linéaires et polynomial, les résultats sont les mêmes en revanches, pour un noyau radial, les résultats sont légérement moins bon. Plusieurs possibilités peuvent être la cause de cela : soit les variables explicatives sont trop nombreuse et/ou non-représentatives, soit les valeurs par défauts des paramètres des classifacteurs sont mauvaises.\
+Essayons en utilisant que les variables explicatives nous semblant importantes.\
+On n'utilisera que deux types de noyau : linéaire et radial (étant donné que linéaire et polynomial ont des résultats trés proches).\
+
+4)\
+Nous procéderons comme à la question suivantes sauf que cette fois ci on utilise que les variables explicatives longueur et largeur des pétales. POur cela de notre ensemble Train/Test d'avant, on n'utilise que les colonnes 3 et 5.
+```{r}
+Train_partial = Train[,3:5]
+Test_partial = Test[,3:5]
+```
+
+a-c)\
+Classificateur SVM avec noyau linéaire et matrices de confusions:\
+```{r}
+modele1_partial = svm(Species~., data = Train_partial, kernel = "linear", scale = FALSE)
+pred1_partial = predict(modele1_partial,Test_partial)
+table(pred1_partial,Test_partial[,3])
+```
+
+On a une erreur de classement : la précision est de $95\%$.\
+
+b-c)\
+Classificateur SVM avec noyau radial et matrices de confusions:\
+```{r}
+modele3_partial = svm(Species~., data = Train_partial, kernel = "radial", scale = FALSE)
+pred3_partial = predict(modele3_partial,Test_partial)
+table(pred3_partial,Test_partial[,3])
+```
+
+On a une erreur de classement : la précision est de $95\%$.\
+
+Les deux méthodes ayant les mêmes précision on garde le modèle avec noyau linéaire :\
+
+```{r}
+plot(modele1_partial, data =Train_partial)
+```
+
+Pour aller un peu plus loin, on fait une validation croisée pour rechercher la meilleure valeur de C, on prend C allant de 0.5 à 1.5 par pas de 0.1 :
+```{r}
+Modele4_partial =tune(svm,Species~.,data=Train_partial,kernel="linear",ranges=list(cost=seq(0.5,1.5,by = 0.1)), scale = FALSE)
+summary(Modele4_partial)
+```
+
+```{r}
+Modele_final = Modele4_partial$best.model
+summary(Modele_final)
+```
+Le meilleur modèle ressort avec $C=0.8$, pour une erreur de 0.04166667, soit une précision de $95,83\%$.
+On le trace : 
+```{r}
+plot(svm(Species~., data = Train_partial, kernel = "linear",cost =0.8, scale = FALSE),data = Train_partial)
+```
+d)\
+En utilisant les deux types de noyau (linéaire et radial) sur le sous-ensemble d'iris, nos précision sont les mêmes, à paramètres non optimisés.\
+
+e)\
+En comparant avec les résultats émis en 3d), le fait d'avoir séparé les données ne semblent pas avoir drastiquement changé la précision :\
+On peut émettre plusieurs théories :\
+- Toutes les données sont nécessaire pour cette classification SVM.\
+- Notre séparation des données d'iris en ensemble Train/Test n'est pas judicieux. La lecture graphique nous prouve que l'espèce Setosa est nettement séparable des deux autres pour qui la séparation est plus floue. Nous aurions pu jouer là-dessus.\
+De plus, la meilleure séparation qu'on aurait pu faire est une séparation à 10 plis, cela nous aurait permis de couvrir l'ensemble des possibilités et d'avoir des résultats plus pertinents.
+
+# Conclusion:\
+Dans ce document, nous avons effectués une classification SVM de tous types de noyaux pour les données iris. Une première partie a été faite en considérant l'ensemble des paramètres, puis un seconde en ne prennant en compte que les caractéristiques des pétales.

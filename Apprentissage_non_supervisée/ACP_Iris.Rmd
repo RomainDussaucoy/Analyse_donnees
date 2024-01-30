@@ -1,0 +1,62 @@
+---
+title: "TD5 Exercice2"
+author: "Romain Dussaucoy"
+date: "04/04/2022"
+output: html_document
+---
+```{r}
+library(GGally)
+```
+On charge les données Iris, puis avec `ggpairs()`, on trace les nuages de points, les courbes de densitées qui s'apparentent aux histogrammes et les corrélations.\
+
+```{r}
+data(iris)
+ggpairs(iris)
+```
+
+On calcule les composantes principales avec les données normalisées (`scale = TRUE`), puis on affiche les résultats.
+
+```{r}
+pc.out = prcomp(iris[,-5], scale =TRUE)
+pc.out
+```
+
+```{r}
+summary(pc.out)
+```
+
+On calcule la proportion de variance expliquée :
+```{r}
+pc_var = pc.out$sdev^2
+pve=pc_var/sum(pc_var)
+pve
+```
+Puis on la trace :
+```{r}
+plot(pve,xlab ="composante principale", ylab ="proportion de variance expliquée",ylim=c(0,1),type='b')
+```
+
+Le coude étant vers trois composante principale, on peut estimer que les données Iris peuvent s'expliquer grâce à trois variables explicatives.\
+On trace les résultats de l'ACP :\
+
+```{r}
+library(ggfortify)
+autoplot(pc.out,loadings =TRUE, loadings.label = TRUE)
+```
+
+On voit que la flêche qui porte la variable Sepal Lenght est plus petite que les autres, d'ailleurs les trois autres ont à peu près la même longueur.\
+On peut donc estimer que la variable Sepal Lenght est celle apportant le moins d'informations aux données.
+
+On se propose de donner une représentation plus sophistiquée.\
+Pour la première, on utilise `fviz_pca_ind` de la bibliothèque `factoextra` qui nous fournit aussi un indicateur de classification des espèces. En revanche, elle ne nous renseigne pas sur quelle variable du dataset porte le mieux l'information.\
+
+```{r}
+library(factoextra)
+fviz_pca_ind(pc.out, col.ind = iris[,5], repel =TRUE,addEllipses = TRUE)
+```
+
+En utilisant `fviz_pca_biplot`, on a toujours notre indicateur de classification selon les espèces et de plus nous avons maintenant les informations sur les variables du dataset.\
+```{r}
+fviz_pca_biplot(pc.out, col.ind = iris[,5], addEllipses = TRUE)
+```
+

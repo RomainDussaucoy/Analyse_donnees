@@ -1,0 +1,247 @@
+---
+title: "TD2 Exercice4"
+author: "Romain Dussaucoy"
+date: "04/02/2022"
+output: html_document
+---
+```{r message=FALSE, warning=FALSE}
+library(GGally)
+library(ggplot2)
+```
+
+Le but du présent document est d'ajuster un modèle de régression expliquant l'atténuation de l'accélération de l'onde d'un tremblement de terre en fonction de sa distance entre la station de mesure et l'épicentre du tremblement de terre.\
+Pour cela, on dispose d'un dataset interne de R : __attenu__ disposant des variables :
+ -__event__ : nombre de tremblement de terre.\
+ -__mag__ : magnétude du tremblement de terre.\
+ -__station__ : station de mesure.\
+ -__dist__ : distance entre la station de mesure et l'épicentre.\
+ -__accel__ : accélération de l'onde.\
+
+On dispose de 182 observations. Nous nous concentrerons essentiellement sur les variables __dist__ et __accel__.
+
+```{r}
+data(attenu)
+attach(attenu)
+head(attenu)
+```
+
+Avant toute chose, on vérifie s'il n'y a pas de données problématiques : 
+```{r}
+print(which(is.na(dist)))
+print(which(is.na(accel)))
+```
+
+1)a)
+Etant donné que nous n'avons pas de données problèmatiques, on peut procéder à l'étude des données exploratoires :
+
+```{r}
+summary(attenu[,4:5])
+```
+
+Les variances :
+
+```{r}
+apply(attenu[,4:5],2,var)
+```
+
+et les écarts-types : 
+
+```{r}
+apply(attenu[,4:5],2,sd)
+```
+
+On visualise la corrélation et le nuage de points entre les deux variables ainsi que leurs courbes de densité : 
+
+```{r}
+ggpairs(attenu[,4:5])
+```
+
+b)
+On trace le nuage de points de __accel__ en fonction de __dist__ avec la fonction `gg_point()` et une courbe de régression sans méthode particulière avec `gg_smooth`.
+
+```{r}
+ggplot(attenu, aes(x=dist, y = accel))+
+  geom_point()+
+  geom_smooth(color = "red")
+```
+
+c)
+Etant donné la forme non-linéaire de la courbe, les deux variables doivent avoir une relation non-linéaire les liant.
+
+2)a)
+
+Etant donné la tendance non-linéaire, on effectue un changement de variables en prenant le logarithme de l'accélération :
+
+```{r}
+new_accel = log(accel)
+head(new_accel)
+```
+
+b) 
+On retrace le nuage de points mais cette fois en changeant __accel__ par __log(accel)__, et on ajoute la courbe de lissage.
+```{r}
+ggplot(attenu, aes(x=dist, y = new_accel))+
+  geom_point()+
+  geom_smooth(color = "red")
+```
+c) 
+On observe que le nuage de points suit plus la courbe, on est sur la bonne voie mais l'ajustement pourrait être meilleur.
+
+3)a)
+
+On effectue un nouveau changement de variables en prenant une puissance $-0.5$ pour l'accélération.
+```{r}
+new_accel_2 = 1/sqrt(accel)
+head(new_accel_2)
+```
+
+b)
+On trace le nouveau nuage de points et sa courbe de lissage.
+```{r}
+ggplot(attenu, aes(x=dist, y = new_accel_2))+
+  geom_point()+
+  geom_smooth(color = "red")
+```
+
+c) 
+Les résultats sont satisfaisants, surtout pour les faibles valeurs de __dist__, malgré cela, la zone grisée (qui représente la dispersion autour de la courbe) augmente quand la distance augmente.
+
+4)a)
+Pour résoudre ce problème de dispersion, on applique une puissance $0.25$ sur les deux variables.
+```{r}
+new_accel_3 = accel^(1/4)
+new_dist = dist^(1/4)
+```
+
+b)
+On trace le nuage de points et la courbe de lissage obtenue.
+
+```{r}
+ggplot(attenu, aes(x=new_dist, y = new_accel_3))+
+  geom_point()+
+  geom_smooth(color = "red")
+```
+
+c)
+Les résultats sont trés satisfaisants, la courbe s'aligne bien sur les points, la dispersion autour de la courbe est bonne et la courbe a une forme quasi-linéaire. On peut donc faire une droite de régression à nos données.
+
+5)a)
+
+On trace le résultat avec l'option `method = "lm"` dans la fonction `geom_smooth`:
+
+```{r}
+ggplot(attenu, aes(x=new_dist, y = new_accel_3))+
+  geom_point()+
+  geom_smooth(method = "lm",color = "red")
+```
+```{r}
+modèle = lm(new_accel_3~new_dist)
+summary(modèle)
+```
+
+Le $R^{2}^$ n'est pas assez bon (0.6685<0.75), on vérifie tout de même les graphiques statistiques :
+
+6)a)
+```{r}
+par(mfrow = c(2,2))
+plot(modèle)
+```
+
+b)
+Les quatre graphiques sont bons : les courbes issues de __Residuals Vs fitted__ et __Scale-Location__ ne suivent pas de tendance générale, elles restent contantes. Tous les points sont proches de la droite diagonale dans le __Normal Q-Q__ et le graphique __Residuals vs Leverage__ ne montre pas de points à forte dominance.
+
+7) 
+On se propose de faire une validation croisée à 10 plis pour vérifier du pouvoir prédictif. On va séparer nos échantillons en 10 sous-échantillons distincts. Tour à tour, on garde neuf échantillons pour entrainer le modèle, puis on le teste sur le sous-échantillon restant. Suite à cela, on change les sous echantillons d'apprentissage. On fait cela jusqu'à ce que les 10 sous-échantillons soit passés en tant que valeurs de test.
+Comme on a 182 valeurs, on sépare l'échantillon en 9 sous-échantillons de 18 valeurs et un de 20.
+Comme on souhaite comprendre le mécanisme derrière, on tente de le faire entièrement à la main :
+
+```{r}
+#création de 4 matrices : 2 pour les valeurs de test de taille (18,9) et deux autres pour le training de taille (164,9):
+Train_Mat_dist = matrix(data = NA, nrow =length(dist)-18, ncol =9)
+Train_Mat_accel = matrix(data = NA, nrow =length(accel)-18, ncol =9)
+Test_Mat_accel = matrix(data = NA, nrow = 18,ncol= 9)
+Test_Mat_dist = matrix(data = NA, nrow = 18,ncol= 9)
+
+n = 18
+#Remplissage des matrices 
+for (i in 0:8){
+  Test_Mat_accel[,i+1] = accel[(n*i+1):(n*(i+1))]
+  Test_Mat_dist[,i+1] = dist[(n*i+1):(n*(i+1))]
+  Train_Mat_accel[,i+1] = accel[-((n*i+1):(n*(i+1)))]
+  Train_Mat_dist[,i+1] = dist[-((n*i+1):(n*(i+1)))]
+}
+#On effectue le dernier pli à la main car il contient 20 valeurs aux lieux de 18 : 
+Test_10_accel = accel[163:182]
+Test_10_dist = dist[163:182]
+Train_10_accel = accel[1:162]
+Train_10_dist = dist[1:162]
+```
+
+Maintenant que tous nos sous-échantillons sont construits, on vérifie qu'on ne s'est pas trompé en laissant des valeurs `NaN`.
+```{r}
+which(is.na(Test_Mat_accel))
+which(is.na(Train_Mat_accel))
+which(is.na(Test_Mat_dist))
+which(is.na(Train_Mat_dist))
+```
+
+Maintenant pour chaque sous-échantillon on calcul le MSE = $\frac{\sum e_{i}^{2}}{n-2}$ avec $n=\{18,20\}$
+```{r}
+#Création d'un vecteur pour les différentes valeurs de MSE :
+MSE_list = rep(NA, times = 10)
+for (i in 1:9){
+  A = Train_Mat_accel[,i]^(0.25)
+  B = Train_Mat_dist[,i]^(0.25)
+#Construction du modèle :
+  modèle = lm(A~B)
+  mse = 0
+#Calcul du MSE :
+  for (j in length(Test_Mat_accel[,1])){
+    mse = mse + (Test_Mat_dist[j,i]-coef(modèle)[1]-coef(modèle)[2]*Test_Mat_accel[j,i])^2
+    MSE = mse/(length(Test_Mat_accel[,1])-2)
+    MSE_list[i]=MSE
+  }   
+}
+#Calcul du MSE pour le plus grand sous-échantillon
+A = Train_10_accel^(0.25)
+B = Train_10_dist^(0.25)
+modèle=lm(A~B)
+mse = 0
+  for (j in length(Test_10_accel)){
+    mse = mse + (Test_10_dist[j]-coef(modèle)[1]-coef(modèle)[2]*Test_10_accel[j])^2
+    MSE = mse/(length(Test_10_accel)-2)
+    MSE_list[10]=MSE
+  }
+print(MSE_list)
+```
+
+Une première observation est la variance entre toutes ses valeurs : la plus grande est de $150,76$ tandis que la plus petite est de $3.52$, l'erreur moyenne est de :
+
+```{r}
+mean(MSE_list)
+```
+Pour la visualisation des données, nous prendrons le modèle avec la plus petite MSE : 
+
+```{r}
+A = Train_Mat_accel[,6]^(1/4)
+B = Train_Mat_dist[,6]^(1/4)
+summary(lm(A~B))
+```
+
+On remarque qu'on n'a pas baissé ni augmenté considérablement la valeur du $R^{2}$ étant donné que nous avons peu baissé la complexité du modèle (il a été fait sur 164 valeurs contre 182 à l'origine).
+
+```{r}
+df = data.frame(A,B)
+ggplot(df,aes(x =B,y = A))+
+         geom_point()+
+         geom_smooth(method = "lm")
+```
+
+
+# Conclusion : 
+Dans ce document, nous avons ajusté un modèle de régression expliquant l'atténuation de l'accélération de l'onde d'un tremblement de terre en fonction de sa distance entre la station de mesure et l'épicentre du tremblement de terre. Pour ce faire, nous avons eu recours à plusieurs changements de variable car nous avons une tendance non-linéaire reliant nos deux variables.
+Nous sommes par ce biais, arrivés à un changement de variables d'une puissance d'un quart de nos deux variables. Grâce à cela, la courbe de lissage étant devenue quasiment linéaire, on a pu procéder à une régression linéaire.
+Suite à cela, nous avons tenté de procéder à une validation croisée à 10 plis pour tester son pouvoir prédictif.
+
+
+

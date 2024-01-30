@@ -1,0 +1,182 @@
+---
+title: "TD3 Exerice1"
+author: "Romain Dussaucoy"
+date: "15/02/2022"
+output: html_document
+---
+L'intérêt de ce document est d'effectuer une classifaction k-NN ("k-Nearest Neighbors) sur les données `iris`. Cet ensemble de données contient des informations sur la longueur et la largeur des pétales et des sépales, chaque fleur est catégorisée par son espèce : __Versicolor__, __Setosa__ ainsi que __Virginica__.
+
+```{r}
+library(GGally)
+library(class)
+```
+
+1)
+On commence pas chargeR les données.
+
+```{r}
+data(iris)
+attach(iris)
+head(iris)
+```
+
+Par chance les données sont déja classés, les 50 premières sont les iris correspondant à l'espèce Setosa, les 50 suivantes sont les espèces Versicolor et les dernières sont les Virginica. La fonction `summary()` nous indiquera si une espèce n'est pas à sa place.
+```{r}
+Setosa = iris[1:50,]
+Versicolor =  iris[51:100,]
+Virginica = iris[101:150,]
+```
+
+On commence par faire une analyse exploratoire de chacune des espèces.\
+Pour Setosa : \
+La vue d'ensemble :
+```{r}
+summary(Setosa)
+```
+
+Les variances :
+```{r}
+apply(Setosa[,-5],2,var)
+```
+
+Les écarts-types :
+```{r}
+apply(Setosa[,-5],2,sd)
+```
+
+Les différents nuages de points, les corrélations ainsi que les courbes de densités :
+
+```{r}
+ggpairs(Setosa[,-5])
+```
+
+Pour l'espèce Versicolor :\
+La vue d'ensemble :\
+```{r}
+summary(Versicolor)
+```
+
+Les variances :
+```{r}
+apply(Versicolor[,-5],2,var)
+```
+
+Les écarts-types :\
+```{r}
+apply(Versicolor[,-5],2,sd)
+```
+
+Les différents nuages de points, les corrélations ainsi que les courbes de densités :
+
+```{r}
+ggpairs(Versicolor[,-5])
+```
+
+Pour l'espèce Virginica :\
+La vue d'ensemble :\
+```{r}
+summary(Virginica)
+```
+
+Les variances :
+```{r}
+apply(Virginica[,-5],2,var)
+```
+
+Les écarts-types :\
+```{r}
+apply(Virginica[,-5],2,sd)
+```
+
+Les différents nuages de points, les corrélations ainsi que les courbes de densités :
+```{r}
+ggpairs(Virginica[,-5])
+```
+2) Nous allons procéder à une classification k-NN. Ici on détaille les différents paramétres pris en compte.
+```{r}
+help(knn)
+```
+
+`knn(train, test, cl, k = 1)`
+`train` = data frame ou matrice d'apprentissage, le modèle est construit sur ces données.\
+`test` = data frame ou matrice de test, le modèle est testé sur ces données, si test est un vecteur alors la fonction donne la classe dans lequel se situe ce vecteur.\
+`cl`= facteur de classification vrai du sous ensemble `train`. Il s'agit de la colonne contenant les différentes classes.\
+`k` = nombre de voisin considéré. Facteur qui détermine à partir de combien de voisins proches deux vecteurs sont dans la même classe.\
+
+3)\
+a) \
+On commence par séparer les données en un ensemble Train/Test avec un rapport de 80/20:
+```{r}
+nb_lignes = 150
+pourcentage = 0.8
+training = sample(1:150, pourcentage * 150, replace = FALSE)
+train = subset(iris[training,])
+
+testing = setdiff(1:150, training)
+test = subset(iris[testing,])
+```
+
+b-c)\
+On exécute k-NN avec $k=2$, puis on affiche la table de confusion :
+
+```{r}
+model1 = knn(train[,1:4], test[,1:4], train[,5] ,k = 2)
+table = table(model1, test[,5])
+print(table)
+```
+
+d) Puis on calcule l'erreur de classement ($1-\frac{\#(bien\_classés)}{\#(Total)}$):\
+
+```{r}
+#Calcul de la précision : somme des éléments diagonaux (éléments bien classés) divisé par le nombre total d'éléments
+précision = 0
+for (i in 1:length(table[1,])){
+  précision = table[i,i] + précision
+}
+précision = précision/length(test[,5])
+print(précision)
+```
+```{r}
+mal_classés = 1-précision
+cat(mal_classés * 100, "% des éléments sont mal classés.")
+```
+
+Quand k=2, On a $3,33\%$ d'erreur de classement. C'est assez bon.\
+4)a)\
+Afin de trouver le meilleur k, on effectue une validation croisée avec 5 folds pour $k \in [1:10]$:
+```{r}
+#Utilisation de la library "caret" pour faire facilement une validation croisée répétée 
+library(caret)
+
+#Définition de "train_control" : Une validation croisée à 5 plis répétées 5 fois
+train_control = trainControl(method = "repeatedcv", number = 5, repeats = 5)
+
+#Définition de nos valeurs de k allant varier dans la validation croisée
+k_value = expand.grid(k = seq(1:10))
+
+#Création du modèle
+model2 = train(Species~., data = iris, trControl = train_control, method ="knn", tuneGrid = k_value)
+
+#Résultats
+print(model2)
+```
+
+La partie `results` de notre sortie de fonction `train()` nous affiche un data frame contenant la valeur de __k__, __accuracy__ (qui nous servira pour calculer le taux d'erreur) ainsi que le paramètre __kappa__\:
+```{r}
+k = seq(1:10)
+taux_percentage = (1-model2$results[,2])*100
+Taux_erreur = data.frame(k,taux_percentage)
+print(Taux_erreur)
+```
+
+De notre dataframe, on déduit que notre valeur optimal pour k est $k=4$, on peut vérifier avec la commande `plot()` qui prend en argument notre sortie `train()`
+
+```{r}
+plot(model2)
+```
+
+d) Assez étrangement, notre meilleure valeur pour k est 4, qui affiche un taux d'erreur de $3,33 \%$, exactement celui calculé pour $k=2$ sans validation croisée, d'ailleurs $k=2$ est désormais notre plus "mauvaise" valeur. D'où l'intéret d'effectuer une validation croisée pour ce type de problème.
+
+### Conclusion
+
+Dans ce document nous avons effectués une classification de type k-nn avec et sans validation croisée. Les résultats sont bien différents et nous garderons les résultats issus de la validation croisée. Néamoins, pour chaque valeur de k le taux d'erreur est assez bas ($< 5 \%$)). On peut conclure, que les données iris sont trés souple à ce type de classification étant donné que le paramètre k ne semblent pas énormément influés.
